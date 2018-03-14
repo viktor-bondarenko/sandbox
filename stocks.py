@@ -1,72 +1,58 @@
-import csv
 import collections
+import csv
+
+import requests
 
 symbols = []
-Stock = collections.namedtuple('Stock', ['symbol', 'name', 'price', 'marketCap', 'ipoYear', 'sector', 'industry', 'SummaryQuote', 'garbage'])
-StockHttp = collections.namedtuple('StockHttp', ['symbol', 'name', 'lastSale', 'marketCap', 'ipoYear', 'sector', 'industry', 'SummaryQuote', 'garbage'])
-StockNasdaqListed = collections.namedtuple('StockNasdaqListed', ['symbol', 'name', 'marketCategory', 'testIssue', 'financialStatus', 'roundLot', "ETF", "nextShares"])
-StockNasdaqTraded = collections.namedtuple('StockNasdaqTraded', ["nasdaqTraded", "symbol", "securityName", "listingExchange", "marketCategory", "ETF", "roundLotSize", "testIssue", "financialStatus", "cqsSymbol", "nasdaqSymbol", "nextShares"])
+Stock = collections.namedtuple('Stock',
+                                   ['symbol', 'name', 'lastSale', 'marketCap', 'ipoYear', 'sector', 'industry',
+                                    'SummaryQuote', 'garbage'])
 
 
-def get_stocks_universal(file_name, tupleFunction, delimiter=","):
+def get_stocks_from_http(exchange_name):
+    url = 'https://www.nasdaq.com/screening/companies-by-name.aspx'
     stocks = dict()
-    with open(file_name, 'rb') as f:
-        header = True
-        reader = csv.reader(f, delimiter=delimiter)
-        for row in reader:
-            if header:
-                header = False
-                continue
-            try:
-                stock = tupleFunction(row)
-            except BaseException as err:
-                print err
-                continue
-            if not stock.symbol.startswith("File Creation Time:"):
-                if 'ETF' in stock.__dict__.keys():
-                    if stock.ETF == 'N' and (stock.financialStatus == 'N' or not stock.financialStatus):
-                        stocks[stock.symbol.strip()] = stock
-                    else:
-                        if stock.symbol == "CEL":
-                            print stock
-                else:
-                    stocks[stock.symbol.strip()] = stock
+    params = {"letter": "0", "exchange": exchange_name, "render": "download"}
+    response = requests.get(url, params)
+    rows = response.content.split("\r\n")
+    reader = csv.reader(rows)
+    header = True
+    for row in reader:
+        if header:
+            header = False
+            continue
+        try:
+            stock = Stock._make(row)
+        except BaseException as err:
+            print err
+            continue
+        stocks[stock.symbol.strip()] = stock
     return stocks
 
+def merge(dict1, dict2):
+    result = dict1.copy()
+    for key, value in dict2.iteritems():
+        print "{} -> {}".format(key, value)
+        value_from_first_dict = dict1.get(key)
+        if value_from_first_dict:
+            print "first map already has it {} -> {}".format(key, value_from_first_dict)
+        else:
+            result[key] = value
+    return result
 
-nasdaq = get_stocks_universal('/Users/vbondarenko/Documents/inv/companylist.csv', StockHttp._make)
-nyse = get_stocks_universal('/Users/vbondarenko/Documents/inv/nyse.csv', StockHttp._make)
-amex = get_stocks_universal('/Users/vbondarenko/Documents/inv/amex.csv', StockHttp._make)
+# nasdaq = get_stocks_from_http('nasdaq')
+# nyse = get_stocks_from_http('nyse')
+# amex = get_stocks_from_http('amex')
 
-all1 = get_stocks_universal('/Users/vbondarenko/Documents/inv/nasdaqlisted.txt', StockNasdaqListed._make, "|")
-all2 = get_stocks_universal('/Users/vbondarenko/Documents/inv/nasdaqtraded.txt', StockNasdaqTraded._make, "|")
+# print "nasdaq = {}".format(nasdaq.__len__())
+# print "nyse = {}".format(nyse.__len__())
+# print "amex = {}".format(amex.__len__())
 
+# all_from_http = set(nasdaq.keys()) | set(nyse.keys()) | set(amex.keys())
 
-print "nasdaq = {}".format(nasdaq.__len__())
-print "nyse = {}".format(nyse.__len__())
-print "amex = {}".format(amex.__len__())
-print "nasdaq listed = {}".format(all1.__len__())
-print "nasdaq traded = {}".format(all2.__len__())
+# print "all_from_http = {}".format(all_from_http.__len__())
 
-print "{}-{}={}".format("nasdaq","nyse", (set(nasdaq)-set(nyse)).__len__())
-print "{}-{}={}".format("nyse", "nasdaq", (set(nyse)-set(nasdaq)).__len__())
-
-print "{}-{}={}".format("nasdaq","all1", (set(nasdaq)-set(all1)).__len__())
-print "{}-{}={}".format("all1","nasdaq", (set(all1)-set(nasdaq)).__len__())
-
-print set(nasdaq.keys()) & set(nyse.keys())
-print set(nasdaq.keys()) & set(all1.keys())
-
-print (set(nasdaq.keys()) | set(all1.keys())).__len__()
-
-all_from_ftp = set(all1.keys()) | set(all2.keys())
-all_from_http = set(nasdaq.keys()) | set(nyse.keys()) | set(amex.keys())
-
-print "all_from_http = {}".format(all_from_http.__len__())
-print "all_from_ftp = {}".format(all_from_ftp.__len__())
-
-print all_from_ftp - all_from_http
-print all_from_http - all_from_ftp
-print "ftp - http {}".format((all_from_ftp - all_from_http).__len__() )
-print "http - ftp {}".format((all_from_http - all_from_ftp).__len__() )
-print "all = {}".format((all_from_ftp | all_from_http).__len__() )
+print merge(dict(PIH=Stock._make(['PIH', '1347 Property Insurance Holdings, Inc.', '6.9', '$41.29M', '2014', 'Finance', 'Property-Casualty Insurers', 'https://www.nasdaq.com/symbol/pih', ''])
+                 , TURN=Stock._make(['TURN', '180 Degree Capital Corp.', '2.035', '$63.33M', 'n/a', 'Finance', 'Finance/Investors Services', 'https://www.nasdaq.com/symbol/turn', ''])),
+            dict(PIH=Stock._make(['PIH', '1347 Property Insurance Holdings, Inc.', '7.9', '$41.29M', '2014', 'Finance', 'Property-Casualty Insurers', 'https://www.nasdaq.com/symbol/pih', '']),
+                 FCCY=Stock._make(['FCCY', '1st Constitution Bancorp (NJ)', '19.752', '$159.65M', 'n/a', 'Finance', 'Savings Institutions', 'https://www.nasdaq.com/symbol/fccy', ''])))
